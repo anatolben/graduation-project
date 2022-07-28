@@ -1,0 +1,33 @@
+---
+nginx:
+  hosts:
+    nginx_0:
+      ansible_connection: ssh 
+      ansible_ssh_user: centos
+      ansible_ssh_port: 22
+      ansible_host: "{{ lookup('env', 'ext_ip_addr_node00_nginx') }}"
+    db01:
+      ansible_connection: ssh 
+      ansible_ssh_user: centos
+      ansible_ssh_port: 10022
+      ansible_host: "{{ lookup('env', 'ext_ip_addr_node00_nginx') }}"
+    db02:
+      ansible_connection: ssh
+      ansible_ssh_user: centos
+      ansible_ssh_port: 20022
+      ansible_host: "{{ lookup('env', 'ext_ip_addr_node00_nginx') }}"
+    app:
+      ansible_connection: ssh 
+      ansible_ssh_user: centos
+      ansible_ssh_port: 30022
+      ansible_host: "{{ lookup('env', 'ext_ip_addr_node00_nginx') }}"
+    git:
+      ansible_connection: ssh 
+      ansible_ssh_user: centos
+      ansible_ssh_port: 40022
+      ansible_host: "{{ lookup('env', 'ext_ip_addr_node00_nginx') }}"
+    mon:
+      ansible_connection: ssh 
+      ansible_ssh_user: centos
+      ansible_ssh_port: 50022
+      ansible_host: "{{ lookup('env', 'ext_ip_addr_node00_nginx') }}"

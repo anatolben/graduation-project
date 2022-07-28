@@ -1,0 +1,135 @@
+.
+├── ansible
+│   ├── group_vars
+│   │   └── all
+│   │       └── main.yml
+│   ├── inventory
+│   │   └── prod.yml
+│   ├── requiements.yml
+│   ├── roles
+│   │   ├── gitlab
+│   │   │   ├── defaults
+│   │   │   │   └── main.yml
+│   │   │   ├── files
+│   │   │   │   ├── docker-compose.yaml.j2
+│   │   │   │   └── run.sh.j2
+│   │   │   ├── handlers
+│   │   │   │   └── main.yml
+│   │   │   ├── meta
+│   │   │   │   └── main.yml
+│   │   │   ├── README.md
+│   │   │   ├── tasks
+│   │   │   │   └── main.yml
+│   │   │   ├── tests
+│   │   │   │   ├── inventory
+│   │   │   │   └── test.yml
+│   │   │   └── vars
+│   │   │       └── main.yml
+│   │   ├── monitrp
+│   │   │   ├── defaults
+│   │   │   │   └── main.yml
+│   │   │   ├── files
+│   │   │   │   └── stack
+│   │   │   │       ├── alertmanager
+│   │   │   │       │   └── config.yml
+│   │   │   │       ├── docker-compose.yaml
+│   │   │   │       ├── grafana
+│   │   │   │       │   └── provisioning
+│   │   │   │       │       ├── dashboards
+│   │   │   │       │       │   ├── dashboard.yml
+│   │   │   │       │       │   └── node-exporter-full_rev27.json
+│   │   │   │       │       └── datasources
+│   │   │   │       │           └── datasource.yml
+│   │   │   │       └── prometheus
+│   │   │   │           ├── alert.rules
+│   │   │   │           ├── prometheus.yml
+│   │   │   │           └── sd_configs
+│   │   │   │               └── targets.json
+│   │   │   ├── handlers
+│   │   │   │   └── main.yml
+│   │   │   ├── meta
+│   │   │   │   └── main.yml
+│   │   │   ├── README.md
+│   │   │   ├── tasks
+│   │   │   │   └── main.yml
+│   │   │   ├── templates
+│   │   │   ├── tests
+│   │   │   │   ├── inventory
+│   │   │   │   └── test.yml
+│   │   │   └── vars
+│   │   │       └── main.yml
+│   │   ├── mysqlrp
+│   │   │   ├── defaults
+│   │   │   │   └── main.yml
+│   │   │   ├── files
+│   │   │   ├── handlers
+│   │   │   │   └── main.yml
+│   │   │   ├── meta
+│   │   │   │   └── main.yml
+│   │   │   ├── README.md
+│   │   │   ├── tasks
+│   │   │   │   └── main.yml
+│   │   │   ├── templates
+│   │   │   ├── tests
+│   │   │   │   ├── inventory
+│   │   │   │   └── test.yml
+│   │   │   └── vars
+│   │   │       └── main.yml
+│   │   ├── nginxrp
+│   │   │   ├── defaults
+│   │   │   │   └── main.yml
+│   │   │   ├── files
+│   │   │   │   ├── nginx.conf
+│   │   │   │   ├── nginx.se
+│   │   │   │   ├── proxy.conf
+│   │   │   │   ├── snark_ml.conf
+│   │   │   │   ├── snark_ml_tls.conf
+│   │   │   │   ├── squid.conf.j2
+│   │   │   │   └── ssl.conf
+│   │   │   ├── handlers
+│   │   │   │   └── main.yml
+│   │   │   ├── meta
+│   │   │   │   └── main.yml
+│   │   │   ├── README.md
+│   │   │   ├── tasks
+│   │   │   │   ├── default.yml
+│   │   │   │   ├── enable.yml
+│   │   │   │   └── main.yml
+│   │   │   ├── tests
+│   │   │   │   ├── inventory
+│   │   │   │   └── test.yml
+│   │   │   └── vars
+│   │   │       └── main.yml
+│   │   └── wprp
+│   │       ├── defaults
+│   │       │   └── main.yml
+│   │       ├── files
+│   │       ├── handlers
+│   │       │   └── main.yml
+│   │       ├── meta
+│   │       │   └── main.yml
+│   │       ├── README.md
+│   │       ├── tasks
+│   │       │   └── main.yml
+│   │       ├── tests
+│   │       │   ├── inventory
+│   │       │   └── test.yml
+│   │       └── vars
+│   │           └── main.yml
+│   └── site.yml
+├── packer
+│   ├── centos-7-base.json.sample
+│   └── manage_image.sh
+├── terraform
+│   ├── backend.tf
+│   ├── export_vars.sh
+│   ├── id_rsa.pub
+│   ├── key.json
+│   ├── network.tf
+│   ├── nodes.tf
+│   ├── output.tf
+│   ├── provider.tf
+│   └── variables.tf
+└── tree.txt
+
+57 directories, 75 files

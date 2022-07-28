@@ -1,0 +1,247 @@
+---
+# tasks file for wprp
+- name: Add http proxy.
+  become: true
+  shell: echo "http_proxy=http://{{ proxy }}:3128/" >> /etc/environment
+  tags:
+    - wprp
+    - proxy
+
+- name: Add https proxy.
+  become: true
+  shell: echo "https_proxy=http://{{ proxy }}:3128/" >> /etc/environment
+  tags:
+    - wprp
+    - proxy
+
+- name: Add yum proxy.
+  become: true
+  shell: echo "proxy=http://{{ proxy }}:3128/" >> /etc/yum.conf
+  tags:
+    - wprp
+    - proxy
+
+- name: Install epel-release.
+  become: true
+  ansible.builtin.yum:
+    name:
+      - https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+      - https://mirror.webtatic.com/yum/el7/webtatic-release.rpm
+      - yum-utils
+  tags:
+    - wprp
+    - install
+
+- name: Download the repository prometheus-exporters.
+  become: true
+  ansible.builtin.get_url:
+    url: https://copr.fedorainfracloud.org/coprs/ibotty/prometheus-exporters/repo/epel-7/ibotty-prometheus-exporters-epel-7.repo
+    dest: /etc/yum.repos.d/_copr_ibotty-prometheus-exporters.repo
+  tags:
+    - wprp
+    - install
+
+- name: Upgrade all packages.
+  become: true
+  yum: name=* state=present
+  tags:
+    - wprp
+    - install
+
+- name: Install a list of packages.
+  become: true
+  ansible.builtin.yum:
+    name:
+      - unzip
+      - curl
+      - curl-devel
+      - httpd
+      - node_exporter
+      - php71w
+      - php71w-cli
+      - php71w-curl
+      - php71w-devel
+      - php71w-fileinfo
+      - php71w-gd
+      - php71w-ldap
+      - php71w-mbstring
+      - php71w-mcrypt
+      - php71w-mysqlnd
+      - php71w-odbc
+      - php71w-snmp
+      - php71w-soap
+      - php71w-xml
+      - php71w-zip
+      - policycoreutils-python
+      - unzip
+  notify:
+    - Start httpd
+  tags:
+    - wprp
+    - install
+
+- name: Flush handlers.
+  ansible.builtin.meta: flush_handlers
+  tags:
+    - wprp
+    - install
+
+- name: Enable node_exporter daemon
+  become: true
+  ansible.builtin.service:
+    name: node_exporter
+    enabled: yes
+    state: started
+  tags:
+    - wprp
+    - install
+
+- name: Unarchive a file
+  become: true
+  ansible.builtin.unarchive:
+    src: "https://wordpress.org/wordpress-6.0.tar.gz"
+    dest: /var/www/html/
+    remote_src: yes
+  tags:
+    - wprp
+    - install
+
+- name: Create a directory if it does not exist
+  become: true
+  ansible.builtin.file:
+    path: /var/www/html/wordpress/wp-content/uploads
+    state: directory
+    recurse: yes
+    mode: '0755'
+  tags:
+    - wprp
+    - install
+
+- name: Copy config.
+  become: true
+  ansible.builtin.copy:
+    src: /var/www/html/wordpress/wp-config-sample.php
+    dest: /var/www/html/wordpress/wp-config.php
+    remote_src: yes
+  tags:
+    - wprp
+    - setup
+
+- name: Recursively change ownership of a directory
+  become: true
+  ansible.builtin.file:
+    path: /var/www/html
+    state: directory
+    recurse: yes
+    owner: apache
+    group: apache
+    mode: '0755'
+  tags:
+    - wprp
+    - setup
+
+- name: Replace line in file examples
+  become: true
+  ansible.builtin.replace:
+    path: /var/www/html/wordpress/wp-config.php
+    regexp: '^(.*)(database_name_here)(.*)$'
+    replace: '\1wordpress\3'
+    backup: no
+  tags:
+    - wprp
+    - setup
+
+- name: Replace line in file examples
+  become: true
+  ansible.builtin.replace:
+    path: /var/www/html/wordpress/wp-config.php
+    regexp: '^(.*)(username_here)(.*)$'
+    replace: '\1wordpress\3'
+    backup: no
+  tags:
+    - wprp
+    - setup
+
+- name: Replace line in file examples
+  become: true
+  ansible.builtin.replace:
+    path: /var/www/html/wordpress/wp-config.php
+    regexp: '^(.*)(password_here)(.*)$'
+    replace: '\1wordpress\3'
+    backup: no
+  tags:
+    - wprp
+    - setup
+
+- name: Replace line in file examples
+  become: true
+  ansible.builtin.replace:
+    path: /var/www/html/wordpress/wp-config.php
+    regexp: 'localhost'
+    replace: 'db01.snark.ml'
+    backup: no
+  tags:
+    - wprp
+    - setup
+
+- name: Allow web server connection.
+  become: true
+  command: setsebool -P httpd_can_network_connect 1
+  tags:
+    - wprp
+    - setup
+
+- name: Set SELinux contexts on the wordpress data directory.
+  become: true
+  shell: semanage fcontext -a -t httpd_sys_rw_content_t "/var/www/(/.*)?"
+  tags:
+    - wprp
+    - setup
+
+- name: Apply SELinux contexts.
+  become: true
+  command: restorecon -Rv /var/www
+  tags:
+    - wprp
+    - setup
+
+- name: Replace line in file examples0
+  become: true
+  ansible.builtin.replace:
+    path: /etc/httpd/conf/httpd.conf
+    regexp: '^Listen 80$'
+    replace: 'Listen 0.0.0.0:80'
+    backup: no
+  tags:
+    - wprp
+    - setup
+
+- name: Replace line in file examples1
+  become: true
+  ansible.builtin.replace:
+    path: /etc/httpd/conf/httpd.conf
+    regexp: '^(.*)("/var/www/html")(.*)$'
+    replace: '\1"/var/www/html/wordpress"\3'
+    backup: no
+  tags:
+    - wprp
+    - setup
+
+- name: Replace line in file examples2
+  become: true
+  ansible.builtin.replace:
+    path: /etc/httpd/conf/httpd.conf
+    regexp: '^(.*)(index.html)(.*)$'
+    replace: '\1index.php\3'
+    backup: no
+  notify:
+    - Restart httpd
+  tags:
+    - wprp
+    - setup
+
+- name: Flush handlers.
+  ansible.builtin.meta: flush_handlers
+  tags:
+    - wprp
+    - setup

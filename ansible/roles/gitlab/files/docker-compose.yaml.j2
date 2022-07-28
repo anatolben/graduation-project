@@ -1,0 +1,38 @@
+---
+version: '3.3'
+services:
+  gitlab:
+    image: 'gitlab/gitlab-ce:latest'
+    restart: always
+    hostname: 'gitlab'
+    container_name: gitlab-ce
+    environment:
+      GITLAB_SHARED_RUNNERS_REGISTRATION_TOKEN: "{{ runner_token }}"
+      GITLAB_ROOT_PASSWORD: "{{ root_passw }}"
+      GITLAB_OMNIBUS_CONFIG: |
+        external_url '{{ external_url }}'
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - '/opt/gitlab/config:/etc/gitlab'
+      - '/opt/gitlab/logs:/var/log/gitlab'
+      - '/opt/gitlab/data:/var/opt/gitlab'
+    networks:
+      - gitlab
+
+  gitlab-runner:
+    image: gitlab/gitlab-runner:alpine
+    container_name: gitlab-runner    
+    restart: always
+    depends_on:
+      - gitlab
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - '/opt/gitlab/gitlab-runner:/etc/gitlab-runner'
+    networks:
+      - gitlab
+
+networks:
+  gitlab:
+

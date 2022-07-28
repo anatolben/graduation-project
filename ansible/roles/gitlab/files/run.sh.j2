@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+
+docker exec -i gitlab-ce bash -c "gitlab-rails runner \"token = User.find_by_username('root').personal_access_tokens.create(scopes: [:api, :write_repository], name: 'wp_token'); token.set_token('{{ root_token }}'); token.save! \""

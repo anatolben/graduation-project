@@ -1,0 +1,5 @@
+---
+- name: nginxrp
+  src: git@github.com:anatolben/nginxrp.git
+  scm: git
+  version: main

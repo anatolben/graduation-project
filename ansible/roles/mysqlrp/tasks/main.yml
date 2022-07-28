@@ -1,0 +1,502 @@
+---
+# tasks file for mysqlrp
+- name: Add http proxy.
+  become: true
+  shell: echo "http_proxy=http://{{ proxy }}:3128/" >> /etc/environment
+  tags:
+    - mysqlrp
+    - proxy
+
+- name: Add https proxy.
+  become: true
+  shell: echo "https_proxy=http://{{ proxy }}:3128/" >> /etc/environment
+  tags:
+    - mysqlrp
+    - proxy
+
+- name: Add yum proxy.
+  become: true
+  shell: echo "proxy=http://{{ proxy }}:3128/" >> /etc/yum.conf
+  tags:
+    - mysqlrp
+    - proxy
+
+- name: Copy mysql-community rpm file to server.
+  become: true
+  ansible.builtin.get_url:
+    url: "http://repo.mysql.com/{{ mysql }}.rpm"
+    dest: "/tmp/{{ mysql }}.rpm"
+    use_proxy: yes
+  tags:
+    - mysqlrp
+    - install
+
+- name: Install package mysql-community.
+  become: true
+  ansible.builtin.yum:
+     name: "/tmp/{{ mysql }}.rpm"
+  tags:
+    - mysqlrp
+    - install
+
+- name: Install epel-release.
+  become: true
+  ansible.builtin.yum:
+    name:
+      - epel-release
+  tags:
+    - mysqlrp
+    - install
+
+- name: Download the repository prometheus-exporters.
+  become: true
+  ansible.builtin.get_url:
+    url: https://copr.fedorainfracloud.org/coprs/ibotty/prometheus-exporters/repo/epel-7/ibotty-prometheus-exporters-epel-7.repo
+    dest: /etc/yum.repos.d/_copr_ibotty-prometheus-exporters.repo
+    use_proxy: yes
+  tags:
+    - mysqlrp
+    - install
+
+- name: Upgrade all packages.
+  become: true
+  yum: name=* state=present
+  tags:
+    - mysqlrp
+    - install
+
+- name: Install a list of packages.
+  become: true
+  ansible.builtin.yum:
+    name:
+      - mysql-server
+      - mysql-devel
+      - node_exporter
+      - python3
+      - gcc
+  tags:
+    - mysqlrp
+    - install
+
+- name: Enable node_exporter daemon.
+  become: true
+  ansible.builtin.service:
+    name: node_exporter
+    enabled: yes
+    state: started
+  tags:
+    - mysqlrp
+    - install
+
+- name: Create a directory.
+  become: true
+  ansible.builtin.file:
+    path: /usr/lib/systemd/system/mysqld.service.d
+    state: directory
+    mode: '0755'
+  tags:
+    - mysqlrp
+    - install
+
+- name: Touch a file.
+  become: true
+  ansible.builtin.file:
+    path: /usr/lib/systemd/system/mysqld.service.d/limit.conf
+    state: touch
+    mode: '0755'
+  tags:
+    - mysqlrp
+    - install
+
+- name: Add in file '[Service]'.
+  become: true
+  ansible.builtin.lineinfile:
+    path: /usr/lib/systemd/system/mysqld.service.d/limit.conf
+    search_string: '[Service]'
+    line: '[Service]'
+  vars:
+    ansible_python_interpreter: "{{ python }}"
+  tags:
+    - mysqlrp
+    - install
+
+- name: Add in file 'LimitNOFILE=50000'.
+  become: true
+  ansible.builtin.lineinfile:
+    path: /usr/lib/systemd/system/mysqld.service.d/limit.conf
+    search_string: 'LimitNOFILE=50000'
+    insertafter: '^\[Service\]$'
+    line: 'LimitNOFILE=50000'
+  vars:
+    ansible_python_interpreter: "{{ python }}"
+  tags:
+    - mysqlrp
+    - install
+
+- name: Reload systemd.
+  become: true
+  command: systemctl daemon-reload
+  tags:
+    - mysqlrp
+    - install
+
+- name: Install a list of python packages.
+  become: true
+  ansible.builtin.yum:
+    name:
+      - python3-devel
+      - python3-pip
+  vars:
+    ansible_python_interpreter: "{{ python }}"
+  tags:
+    - mysqlrp
+    - install
+
+- name: Install Required pip modules.
+  become: true
+  pip:
+    name:
+      - PyMySQL
+    state: present
+    executable: pip3
+  notify:
+    - Restart mysql service
+  vars:
+    ansible_python_interpreter: "{{ python }}"
+  tags:
+    - mysqlrp
+    - install
+
+- name: Flush handlers.
+  ansible.builtin.meta: flush_handlers
+  tags:
+    - mysqlrp
+    - install
+
+- name: Ensure root user can only login from localhost.
+  become: true
+  mysql_user:
+    login_password: "{{ mysql_root_password }}"
+    check_implicit_admin: yes
+    name: root
+    host: "{{ item }}"
+    password: "{{ mysql_root_password }}"
+    state: present
+  with_items:
+    - localhost
+    - 127.0.0.1
+  vars:
+    ansible_python_interpreter: "{{ python }}"
+  tags:
+    - mysqlrp
+    - setup
+
+- name: Install a list of SQL.
+  become: true
+  community.mysql.mysql_query:
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+    query:
+    - FLUSH PRIVILEGES
+    - DELETE FROM mysql.user WHERE User=''
+    - DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1')
+    - DROP DATABASE IF EXISTS test
+    - DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%'
+    - FLUSH PRIVILEGES
+    - CREATE DATABASE IF NOT EXISTS wordpress
+    single_transaction: no
+  vars:
+    ansible_python_interpreter: "{{ python }}"
+  tags:
+    - mysqlrp
+    - setup
+
+- name: Create user wordpress.
+  become: true
+  community.mysql.mysql_user:
+    login_password: "{{ mysql_root_password }}"
+    login_user: root
+    state: present
+    name: wordpress
+    password: wordpress
+    host: "%"
+    priv:
+      "wordpress.*:ALL,GRANT"
+  vars:
+    ansible_python_interpreter: "{{ python }}"
+  tags:
+    - mysqlrp
+    - setup
+
+- name: Flush privileges.
+  become: true
+  community.mysql.mysql_query:
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+    query:
+    - FLUSH PRIVILEGES
+    single_transaction: no
+  vars:
+    ansible_python_interpreter: "{{ python }}"
+  tags:
+    - mysqlrp
+    - setup
+
+- name: Create the replication users .
+  become: true
+  community.mysql.mysql_user:
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+    name: "{{ replication_name }}"
+    host: "%"
+    password: "{{ replication_pass|default('foobar') }}"
+    priv: "*.*:REPLICATION SLAVE"
+    state: present
+  vars:
+    ansible_python_interpreter: "{{ python }}"
+  tags:
+    - mysqlrp
+    - setup
+
+- name: Add in file 'explicit_defaults_for_timestamp'.
+  become: true
+  ansible.builtin.lineinfile:
+    path: "{{ config }}"
+    search_string: 'explicit_defaults_for_timestamp'
+    insertafter: '^\[mysqld\]$'
+    line: 'explicit_defaults_for_timestamp'
+  vars:
+    ansible_python_interpreter: "{{ python }}"
+  tags:
+    - mysqlrp
+    - setup
+
+- name: Add in file 'server-id = 1'.
+  become: true
+  delegate_to: db01
+  ansible.builtin.lineinfile:
+    path: "{{ config }}"
+    search_string: 'server-id = 1'
+    insertafter: '^explicit\_defaults\_for\_timestamp$'
+    line: 'server-id = 1'
+  vars:
+    ansible_python_interpreter: "{{ python }}"
+  tags:
+    - mysqlrp
+    - setup
+
+- name: Add in file 'log-bin = mysql-bin'.
+  become: true
+  delegate_to: db01
+  ansible.builtin.lineinfile:
+    path: "{{ config }}"
+    search_string: 'log-bin = mysql-bin'
+    insertafter: '^server\-id \= 1$'
+    line: 'log-bin = mysql-bin'
+  notify:
+    - Restart mysql service
+  vars:
+    ansible_python_interpreter: "{{ python }}"
+  tags:
+    - mysqlrp
+    - setup
+
+- name: Flush handlers.
+  ansible.builtin.meta: flush_handlers
+  tags:
+    - mysqlrp
+    - setup
+
+- name: Add in file 'server-id = 2'.
+  become: true
+  delegate_to: db02
+  ansible.builtin.lineinfile:
+    path: "{{ config }}"
+    search_string: 'server-id = 2'
+    insertafter: '^explicit\_defaults\_for\_timestamp$'
+    line: 'server-id = 2'
+  vars:
+    ansible_python_interpreter: "{{ python }}"
+  tags:
+    - mysqlrp
+    - setup
+
+- name: Add in file 'master-info-repository = file'.
+  become: true
+  delegate_to: db02
+  ansible.builtin.lineinfile:
+    path: "{{ config }}"
+    search_string: 'master-info-repository = file'
+    insertafter: '^server\-id \= 2$'
+    line: 'master-info-repository = file'
+  vars:
+    ansible_python_interpreter: "{{ python }}"
+  tags:
+    - mysqlrp
+    - setup
+
+- name: Add in file 'relay-log-info_repository = file'.
+  become: true
+  delegate_to: db02
+  ansible.builtin.lineinfile:
+    path: "{{ config }}"
+    search_string: 'relay-log-info_repository = file'
+    insertafter: '^master\-info\-repository \= file$'
+    line: 'relay-log-info_repository = file'
+  vars:
+    ansible_python_interpreter: "{{ python }}"
+  tags:
+    - mysqlrp
+    - setup
+
+- name: Add in file 'binlog-format = ROW'.
+  become: true
+  delegate_to: db02
+  ansible.builtin.lineinfile:
+    path: "{{ config }}"
+    search_string: 'binlog-format = ROW'
+    insertafter: '^relay\-log\-info\_repository \= file$'
+    line: 'binlog-format = ROW'
+  vars:
+    ansible_python_interpreter: "{{ python }}"
+  tags:
+    - mysqlrp
+    - setup
+
+- name: Add in file 'log-bin = slave-bin'.
+  become: true
+  delegate_to: db02
+  ansible.builtin.lineinfile:
+    path: "{{ config }}"
+    search_string: 'log-bin = slave-bin'
+    insertafter: '^binlog\-format \= ROW$'
+    line: 'log-bin = slave-bin'
+  vars:
+    ansible_python_interpreter: "{{ python }}"
+  tags:
+    - mysqlrp
+    - setup
+
+- name: Add in file 'relay-log = slave-relay-bin'.
+  become: true
+  delegate_to: db02
+  ansible.builtin.lineinfile:
+    path: "{{ config }}"
+    search_string: 'relay-log = slave-relay-bin'
+    insertafter: '^log\-bin \= slave\-bin$'
+    line: 'relay-log = slave-relay-bin'
+  vars:
+    ansible_python_interpreter: "{{ python }}"
+  tags:
+    - mysqlrp
+    - setup
+
+- name: Add in file 'log-slave-updates'.
+  become: true
+  delegate_to: db02
+  ansible.builtin.lineinfile:
+    path: "{{ config }}"
+    search_string: 'log-slave-updates'
+    insertafter: '^relay\-log \= slave\-relay\-bin$'
+    line: 'log-slave-updates'
+  vars:
+    ansible_python_interpreter: "{{ python }}"
+  tags:
+    - mysqlrp
+    - setup
+
+- name: Restart mysql service
+  become: true
+  ansible.builtin.service:
+    name: mysqld
+    state: restarted
+    enabled: yes
+  tags:
+    - mysqlrp
+    - setup
+
+- name: Stop mysql replica thread.
+  become: true
+  community.mysql.mysql_replication:
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+    config_file: "{{ config }}"
+    mode: stopreplica
+  vars:
+    ansible_python_interpreter: "{{ python }}"
+  tags:
+    - mysqlrp
+    - replica
+
+- name: Get primary binlog file name and binlog position.
+  become: true
+  delegate_to: db01
+  community.mysql.mysql_replication:
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+    config_file: "{{ config }}"
+    mode: getprimary
+  register: masterstatus
+  vars:
+    ansible_python_interpreter: "{{ python }}"
+  tags:
+    - mysqlrp
+    - replica
+
+- debug: var=masterstatus.File
+  tags:
+    - mysqlrp
+    - replica
+
+- debug: var=masterstatus.Position
+  tags:
+    - mysqlrp
+    - replica
+
+- name: Change primary.
+  become: true
+  delegate_to: db02
+  community.mysql.mysql_replication:
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+    config_file: "{{ config }}"
+    mode: changeprimary
+    master_host: "db01.snark.ml"
+    master_log_file: "{{ masterstatus.File }}"
+    master_log_pos: "{{ masterstatus.Position | int }}"
+    primary_user: "{{ replication_name }}"
+    primary_password: "{{ replication_pass|default('foobar') }}"
+  vars:
+    ansible_python_interpreter: "{{ python }}"
+  tags:
+    - mysqlrp
+    - replica
+
+- name: Run start replica.
+  become: true
+  delegate_to: db02
+  community.mysql.mysql_replication:
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+    config_file: "{{ config }}"
+    mode: startreplica
+  vars:
+    ansible_python_interpreter: "{{ python }}"
+  tags:
+    - mysqlrp
+    - replica
+
+- name: Check slave status.
+  become: true
+  delegate_to: db02
+  community.mysql.mysql_replication:
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+    config_file: "{{ config }}"
+    mode: getreplica
+  vars:
+    ansible_python_interpreter: "{{ python }}"
+  tags:
+    - mysqlrp
+    - replica
+

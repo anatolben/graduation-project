@@ -1,0 +1,34 @@
+---
+  - name: Deploy nginx, acme, freenom-script, squid.
+    hosts:
+      - nginx_0
+    roles:
+      - nginxrp
+  - name: Deploy MySQL cluster.
+    hosts:
+      - db01
+      - db02
+    roles:
+      - mysqlrp
+  - name: Deploy Wordpress.
+    hosts:
+      - app
+    roles:
+      - wprp
+  - name: Deploy gitlab.
+    hosts:
+      - git
+      - app
+    roles:
+      - gitlab
+  - name: Deploy Prometheus, Grafana, Alertmanager.
+    hosts:
+      - mon
+    roles:
+      - monitrp
+  - name: Enable nginx upstreams endpoints.
+    hosts:
+      - nginx_0
+    roles:
+      - role: nginxrp
+        selector: enable

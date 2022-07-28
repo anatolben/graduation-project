@@ -1,0 +1,48 @@
+---
+image: alpine:3.14
+
+stages:
+  - deploy
+
+Deploy to Production:
+  variables:
+    HOST: centos@app.snark.ml
+  stage: deploy
+#  only:
+#    - master
+  before_script:
+    # Setup SSH deploy keys
+    - export HTTP_PROXY="http://snark.ml:3128"
+    - export HTTPS_PROXY="http://snark.ml:3128"
+    - apk update && apk add openssh-client rsync
+    - eval $(ssh-agent -s)
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - echo "${SSH_KEY}" > ~/.ssh/id_rsa
+    - ls -lah ~/.ssh
+    - chmod 600 ~/.ssh/id_rsa
+    - ssh-add ~/.ssh/id_rsa
+    - ssh-keyscan -v -H app.snark.ml > ~/.ssh/known_hosts
+    - chmod 644 ~/.ssh/known_hosts
+    - echo "Host *ntStrictHostKeyChecking no" >> ~/.ssh/config
+  script:
+    - ssh -o PasswordAuthentication=no "${HOST}" 'exit' || echo "SSH login failed."
+    - rsync --version
+    - mkdir -p ./wordpress
+    - ls -a
+    - ssh "${HOST}" 'sudo rm -rf /tmp/wordpress'
+    - |
+        cat <<EOT >> wordpress/version.txt
+          Commit SHA: ${CI_COMMIT_SHA}
+          From ref: ${CI_COMMIT_REF_NAME}
+        EOT
+    - rsync -q -a --progress --human-readable --delete
+      wordpress
+      "${HOST}":/tmp
+    - ssh "${HOST}" 'sudo chown -R apache:apache /tmp/wordpress && ls -lah /tmp/wordpress'
+    - ssh "${HOST}" 'sudo tar -czpf backup_wordpress.tar.gz /var/www/html'
+    - ssh "${HOST}" 'sudo cp -f -r -P /tmp/wordpress /var/www/html'
+    - ssh "${HOST}" 'sudo chown -R apache:apache /var/www/html/wordpress'
+    - ssh "${HOST}" 'sudo chmod -R 755 /var/www/html/wordpress && ls -lah /var/www/html/wordpress'
+    - ssh "${HOST}" 'sudo rm -rf /tmp/wordpress'
+

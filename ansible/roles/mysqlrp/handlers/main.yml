@@ -1,0 +1,14 @@
+---
+# handlers file for mysqlrp
+- name: Start mysql service
+  become: true
+  ansible.builtin.service:
+    name: mysqld
+    state: started
+    enabled: yes
+- name: Restart mysql service
+  become: true
+  ansible.builtin.service:
+    name: mysqld
+    state: restarted
+    enabled: yes

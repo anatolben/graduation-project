@@ -1,0 +1,16 @@
+[
+  {
+    "labels": {
+      "job": "node",
+      "env": "prod"
+    },
+    "targets": [
+      "snark.ml:9100",
+      "db01.snark.ml:9100",
+      "db02.snark.ml:9100",
+      "gitlab.snark.ml:9100",
+      "app.snark.ml:9100"
+   ]
+  }
+]
+

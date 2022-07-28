@@ -1,0 +1,413 @@
+---
+# tasks file for gitlab
+- name: Add http proxy.
+  become: true
+  delegate_to: git
+  shell: echo "http_proxy=http://{{ proxy }}:3128/" >> /etc/environment
+  tags:
+    - gitlab
+    - proxy
+
+- name: Add https proxy.
+  become: true
+  delegate_to: git
+  shell: echo "https_proxy=http://{{ proxy }}:3128/" >> /etc/environment
+  tags:
+    - gitlab
+    - proxy
+
+- name: Add yum proxy.
+  become: true
+  delegate_to: git
+  shell: echo "proxy=http://{{ proxy }}:3128/" >> /etc/yum.conf
+  tags:
+    - gitlab
+    - proxy
+
+- name: Install some packages.
+  become: true
+  delegate_to: git
+  ansible.builtin.yum:
+    name:
+      - https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+      - yum-utils
+      - rsync
+  tags:
+    - gitlab
+    - install
+
+- name: Download the repository prometheus-exporters.
+  become: true
+  ansible.builtin.get_url:
+    url: https://copr.fedorainfracloud.org/coprs/ibotty/prometheus-exporters/repo/epel-7/ibotty-prometheus-exporters-epel-7.repo
+    dest: /etc/yum.repos.d/_copr_ibotty-prometheus-exporters.repo
+  tags:
+    - gitlab
+    - install
+
+- name: Upgrade all packages.
+  become: true
+  delegate_to: git
+  yum: name=* state=present
+  tags:
+    - gitlab
+    - install
+
+- name: Install docker.
+  become: true
+  delegate_to: git
+  shell: |
+    set -o pipefail && \
+    if [ $(rpm -qa | grep -c "docker-ce") -eq 0 ]; \
+    then curl -fsSL https://get.docker.com/ | sh; fi
+  args:
+    executable: /bin/bash
+  tags:
+    - gitlab
+    - install
+
+- name: Enable docker daemon
+  become: true
+  delegate_to: git
+  ansible.builtin.service:
+    name: docker
+    enabled: yes
+    state: started
+  tags:
+    - gitlab
+    - install
+
+- name: Create a directory.
+  become: true
+  delegate_to: git
+  ansible.builtin.file:
+    path: /etc/systemd/system/docker.service.d
+    state: directory
+    mode: '0755'
+  tags:
+    - gitlab
+    - install
+
+- name: Null to http-proxy.conf.
+  become: true
+  delegate_to: git
+  shell: echo "" > /etc/systemd/system/docker.service.d/http-proxy.conf
+  tags:
+    - gitlab
+    - proxy
+
+- name: Write to http-proxy.conf.
+  become: true
+  delegate_to: git
+  ansible.builtin.blockinfile:
+    path: /etc/systemd/system/docker.service.d/http-proxy.conf
+    create: yes
+    marker: ""
+    block: |
+      [Service]
+      Environment="HTTP_PROXY=http://snark.ml:3128/"
+      Environment="HTTPS_PROXY=http://snark.ml:3128/"
+      Environment="NO_PROXY=localhost,127.0.0.0/8,10.0.0.0/8,192.168.0.0/16,172.16.0.0/12"
+  tags:
+    - gitlab
+    - proxy
+
+- name: Restart service docker, also issue daemon-reload to pick up config changes.
+  become: true
+  delegate_to: git
+  ansible.builtin.systemd:
+    state: restarted
+    daemon_reload: yes
+    name: docker
+  tags:
+    - gitlab
+    - proxy
+
+
+- name: Install packages.
+  become: true
+  delegate_to: git
+  ansible.builtin.yum:
+    name:
+      - docker-compose
+      - node_exporter
+  tags:
+    - gitlab
+    - install
+
+- name: Enable node_exporter daemon
+  become: true
+  delegate_to: git
+  ansible.builtin.service:
+    name: node_exporter
+    enabled: yes
+    state: started
+  tags:
+    - gitlab
+    - install
+
+- name: Install a list of python3 packages.
+  become: true
+  delegate_to: git
+  ansible.builtin.yum:
+    name:
+      - python3-devel
+      - python3-pip
+  vars:
+    ansible_python_interpreter: "{{ python }}"
+  tags:
+    - gitlab
+    - install
+
+- name: Required pip modules.
+  become: true
+  delegate_to: git
+  pip:
+    name:
+      - docker
+    state: present
+    executable: pip3
+  vars:
+    ansible_python_interpreter: "{{ python }}"
+  tags:
+    - gitlab
+    - install
+
+- name: Create a directory if it does not exist
+  become: true
+  delegate_to: git
+  ansible.builtin.file:
+    path: /opt/gitlab
+    state: directory
+    mode: '0755'
+  tags:
+    - gitlab
+    - install
+
+- name: Template a file docker-compose.
+  become: true
+  delegate_to: git
+  ansible.builtin.template:
+    src: ../files/docker-compose.yaml.j2
+    dest: /opt/gitlab/docker-compose.yaml
+  tags:
+    - gitlab
+    - setup
+
+- name: Prune networks
+  become: true
+  delegate_to: git
+  community.docker.docker_prune:
+    networks: yes
+  vars:
+    ansible_python_interpreter: "{{ python }}"
+  tags:
+    - gitlab
+    - setup
+
+- name: Run docker-compose up.
+  become: true
+  delegate_to: git
+  community.docker.docker_compose:
+    project_src: "/opt/gitlab"
+    build: no
+  register: output
+  vars:
+    ansible_python_interpreter: "{{ python }}"
+  tags:
+    - gitlab
+    - setup
+
+- name: Output.
+  ansible.builtin.debug:
+    var: output
+  tags:
+    - gitlab
+    - setup
+
+- name: Start gitlab (healthy).
+  become: true
+  delegate_to: git
+  shell: |
+    set -o pipefail && \
+    while [ $(docker ps | grep -c healthy) -eq 0 ]; do sleep 30; \
+    done && if [ $(docker ps | grep -c unhealthy) -eq 1 ]; then exit 1; fi
+  args:
+    executable: /bin/bash
+  tags:
+    - gitlab
+    - setup
+
+- name: Register gitlab runner.
+  become: true
+  delegate_to: git
+  shell: |
+    set -o pipefail && \
+    if [[ "$(grep -r "docker-runner" /opt/gitlab/gitlab-runner | wc -l)" -eq 0 ]]; then \
+    docker exec -i \
+    gitlab-runner gitlab-runner register \
+    --non-interactive \
+    --url "http://gitlab" \
+    --registration-token "{{ runner_token }}" \
+    --executor "docker" \
+    --docker-image alpine:latest \
+    --description "docker-runner" \
+    --tag-list "wp" \
+    --run-untagged="true" \
+    --locked="true"; \
+    fi
+  args:
+    executable: /bin/bash
+  tags:
+    - gitlab
+    - setup
+
+- name: Copy script file.
+  become: true
+  delegate_to: git
+  ansible.builtin.template:
+    src: ../files/run.sh.j2
+    dest: /tmp/run.sh
+  tags:
+    - gitlab
+    - setup
+
+- name: Create root token.
+  become: true
+  delegate_to: git
+  shell: |
+    /tmp/run.sh
+  tags:
+    - gitlab
+    - setup
+
+- name: Create repo.
+  become: true
+  delegate_to: git
+  shell: |
+    curl --silent \
+    --header "PRIVATE-TOKEN: {{ root_token }}" \
+    -XPOST "http://localhost/api/v4/projects?name=wordpress&visibility=private&initialize_with_readme=false"
+  tags:
+    - gitlab
+    - setup
+
+- name: Create variable.
+  become: true
+  delegate_to: git
+  shell: |
+    curl --request POST \
+    --header "PRIVATE-TOKEN: {{ root_token }}" "http://gitlab.snark.ml/api/v4/admin/ci/variables" \
+    --form "key=SSH_KEY" --form "value={{ key }}"
+  tags:
+    - gitlab
+    - setup
+
+- name: Create .gitignore.
+  become: true
+  delegate_to: app
+  ansible.builtin.copy:
+    dest: "/var/www/html/.gitignore"
+    owner: apache
+    group: apache
+    mode: '0755'
+    content: |
+      **/wp-config.php
+      environments/**
+      **/*.md
+      .gitignore
+  tags:
+    - gitlab
+    - setup
+
+- name: Copy .gitlab-ci.yml.
+  become: true
+  delegate_to: app
+  ansible.builtin.copy:
+    src: ../files/.gitlab-ci.yml
+    dest: /var/www/html/
+    remote_src: false
+  tags:
+    - gitlab
+    - setup
+
+- name: Install git.
+  become: true
+  delegate_to: app
+  ansible.builtin.yum:
+    name:
+      - git
+  tags:
+    - gitlab
+    - setup
+
+- name: Git commit.
+  become: true
+  delegate_to: app
+  shell:
+    cmd: git init; git add .; git commit -m initial
+    chdir: /var/www/html/
+  tags:
+    - gitlab
+    - setup
+
+- name: Git remote add.
+  become: true
+  delegate_to: app
+  command:
+    cmd: git remote add origin http://wp_token:{{ root_token }}@gitlab.snark.ml/root/wordpress.git
+    chdir: /var/www/html/
+  tags:
+    - gitlab
+    - setup
+
+- name: Git push.
+  become: true
+  delegate_to: app
+  shell:
+    cmd: git branch -M main; git push -uf origin main
+    chdir: /var/www/html/
+  tags:
+    - gitlab
+    - setup
+
+- name: Remove file .git.
+  become: true
+  delegate_to: app
+  ansible.builtin.file:
+    path: "/var/www/html/.git"
+    state: absent
+  tags:
+    - gitlab
+    - setup
+
+- name: Remove file .gitignore.
+  become: true
+  delegate_to: app
+  ansible.builtin.file:
+    path: "/var/www/html/.gitignore"
+    state: absent
+  tags:
+    - gitlab
+    - setup
+
+- name: Remove file .gitlab-ci.yml.
+  become: true
+  delegate_to: app
+  ansible.builtin.file:
+    path: "/var/www/html/.gitlab-ci.yml"
+    state: absent
+  tags:
+    - gitlab
+    - setup
+
+- name: Remove the git package.
+  become: true
+  delegate_to: app
+  ansible.builtin.yum:
+    name: git
+    state: absent
+  tags:
+    - gitlab
+    - setup
+

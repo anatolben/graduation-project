@@ -1,0 +1,177 @@
+---
+# tasks file for monitrp
+- name: Add http proxy.
+  become: true
+  shell: echo "http_proxy=http://{{ proxy }}:3128/" >> /etc/environment
+  tags:
+    - monitrp
+    - proxy
+
+- name: Add https proxy.
+  become: true
+  shell: echo "https_proxy=http://{{ proxy }}:3128/" >> /etc/environment
+  tags:
+    - monitrp
+    - proxy
+
+- name: Add yum proxy.
+  become: true
+  shell: echo "proxy=http://{{ proxy }}:3128/" >> /etc/yum.conf
+  tags:
+    - monitrp
+    - proxy
+
+- name: Install some packages.
+  become: true
+  ansible.builtin.yum:
+    name:
+      - https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+      - yum-utils
+  tags:
+    - monitrp
+    - install
+
+- name: Upgrade all packages.
+  become: true
+  yum: name=* state=present
+  tags:
+    - monitrp
+    - install
+
+- name: Install docker.
+  become: true
+  shell: set -o pipefail && if [ $(rpm -qa | grep -c "docker-ce") -eq 0 ]; then curl -fsSL https://get.docker.com/ | sh; fi
+  args:
+    executable: /bin/bash
+  tags:
+    - monitrp
+    - install
+
+- name: Enable docker daemon
+  become: true
+  ansible.builtin.service:
+    name: docker
+    enabled: yes
+    state: started
+  tags:
+    - monitrp
+    - install
+
+- name: Create a directory.
+  become: true
+  ansible.builtin.file:
+    path: /etc/systemd/system/docker.service.d
+    state: directory
+    mode: '0755'
+  tags:
+    - monitrp
+    - install
+
+- name: Null to http-proxy.conf.
+  become: true
+  shell: echo "" > /etc/systemd/system/docker.service.d/http-proxy.conf
+  tags:
+    - monitrp
+    - proxy
+
+- name: Write to http-proxy.conf.
+  become: true
+  ansible.builtin.blockinfile:
+    path: /etc/systemd/system/docker.service.d/http-proxy.conf
+    create: yes
+    marker: ""
+    block: |
+      [Service]
+      Environment="HTTP_PROXY=http://snark.ml:3128/"
+      Environment="HTTPS_PROXY=http://snark.ml:3128/"
+      Environment="NO_PROXY=localhost,127.0.0.0/8,10.0.0.0/8,192.168.0.0/16,172.16.0.0/12"
+  tags:
+    - monitrp
+    - proxy
+
+- name: Restart service docker, also issue daemon-reload to pick up config changes.
+  become: true
+  ansible.builtin.systemd:
+    state: restarted
+    daemon_reload: yes
+    name: docker
+  tags:
+    - monitrp
+    - proxy
+
+- name: Install packages.
+  become: true
+  ansible.builtin.yum:
+    name:
+      - docker-compose
+  tags:
+    - monitrp
+    - install
+
+- name: Install a list of python3 packages.
+  become: true
+  ansible.builtin.yum:
+    name:
+      - python3-devel
+      - python3-pip
+  vars:
+    ansible_python_interpreter: "{{ python }}"
+  tags:
+    - monitrp
+    - install
+
+- name: Required pip modules.
+  become: true
+  pip:
+    name:
+      - docker
+    state: present
+    executable: pip3
+  vars:
+    ansible_python_interpreter: "{{ python }}"
+  tags:
+    - monitrp
+    - install
+
+- name: Copy files
+  become: true
+  ansible.builtin.copy:
+    src: ../files/stack/
+    dest: "/opt/stack/"
+    owner: root
+    group: root
+    mode: 0644
+    remote_src: false
+  tags:
+    - monitrp
+    - setup
+
+- name: Prune networks
+  become: true
+  community.docker.docker_prune:
+    networks: yes
+  vars:
+    ansible_python_interpreter: "{{ python }}"
+  tags:
+    - monitrp
+    - setup
+
+- name: Pull all images in compose.
+  become: true
+  community.docker.docker_compose:
+    project_src: "/opt/stack"
+    pull: yes
+    build: no
+  register: output
+  vars:
+    ansible_python_interpreter: "{{ python }}"
+  tags:
+    - monitrp
+    - setup
+
+- name: Output
+  ansible.builtin.debug:
+    var: output
+  tags:
+    - monitrp
+    - setup

@@ -1,0 +1,14 @@
+route:
+  receiver: smtp-local
+receivers:
+  - name: 'smtp-local'
+    email_configs:
+    - to: 'to@example.com'
+      from: 'from@example.com'
+      require_tls: false
+      #auth_username: 'alertmanager'
+      #auth_password: 'password'
+      #auth_secret: 'secret'
+      #auth_identity: 'identity'
+      smarthost: localhost:25
+      send_resolved: true

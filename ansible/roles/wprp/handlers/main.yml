@@ -1,0 +1,16 @@
+---
+# handlers file for wprp
+- name: Start httpd
+  become: true
+  ansible.builtin.service:
+    name: httpd
+    enabled: yes
+    state: started
+
+- name: Restart httpd
+  become: true
+  ansible.builtin.service:
+    name: httpd
+    enabled: yes
+    state: restarted
+
